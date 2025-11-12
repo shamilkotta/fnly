@@ -1,0 +1,39 @@
+{
+  "name": "fnly",
+  "version": "0.0.0",
+  "type": "module",
+  "bin": {
+    "fnly": "./dist/bin/fnly.js"
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsup-node --watch",
+    "build": "tsup",
+    "test": "echo 'Add test script here'",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "commander": "^14.0.2",
+    "esbuild": "^0.25.12",
+    "express": "^4.21.2",
+    "glob": "^11.0.3",
+    "node-fetch": "^3.3.2",
+    "tsx": "^4.20.6"
+  },
+  "files": [
+    "dist"
+  ],
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@fnly/core": "workspace:*",
+    "@types/archiver": "^7.0.0",
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.38.0",
+    "tsup": "^8.5.0",
+    "typescript": "5.9.2"
+  }
+}

@@ -1,9 +1,13 @@
-import { build } from "esbuild";
+// import { build } from "esbuild";
+import { build } from "@fnly/core";
 import { glob } from "glob";
 import path from "path";
 import fs from "fs";
 
 export async function buildCommand() {
+  await build(process.cwd());
+
+  return;
   const cwd = process.cwd();
   const apiDir = path.resolve(cwd, "api");
   const outDir = path.resolve(cwd, ".fnly");
@@ -44,16 +48,16 @@ export async function buildCommand() {
     fs.mkdirSync(outFileDir, { recursive: true });
 
     // Build with esbuild
-    await build({
-      entryPoints: [file],
-      bundle: true,
-      platform: "node",
-      target: "node20",
-      format: "cjs",
-      outfile: outFile,
-      sourcemap: false,
-      minify: false
-    });
+    // await build({
+    //   entryPoints: [file],
+    //   bundle: true,
+    //   platform: "node",
+    //   target: "node20",
+    //   format: "cjs",
+    //   outfile: outFile,
+    //   sourcemap: false,
+    //   minify: false
+    // });
 
     // ✅ Route name logic
     // Remove extension and convert slashes
