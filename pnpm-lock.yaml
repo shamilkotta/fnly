@@ -94,9 +94,6 @@ importers:
 
   packages/cli:
     dependencies:
-      '@fnly/core':
-        specifier: workspace:*
-        version: link:../core
       archiver:
         specifier: ^7.0.1
         version: 7.0.1
@@ -119,6 +116,9 @@ importers:
         specifier: ^4.20.6
         version: 4.20.6
     devDependencies:
+      '@fnly/core':
+        specifier: workspace:*
+        version: link:../core
       '@repo/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
