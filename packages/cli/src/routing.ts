@@ -1,6 +1,8 @@
 import path from "path";
 import fs from "fs/promises";
 import { watch } from "fs";
+import { glob } from "glob";
+import { filePathToRoute } from "@fnly/core";
 
 export interface RouteInfo {
   filePath: string;
@@ -8,87 +10,42 @@ export interface RouteInfo {
   params: string[];
 }
 
-function filePathToRoute(relativeFilePath: string): string {
-  let route = relativeFilePath.replace(/\.ts$/, "").replace(/\.js$/, "");
-
-  route = route.replace(/\\/g, "/");
-
-  if (route.endsWith("/index")) {
-    route = route.replace("/index", "");
-  }
-
-  route = route.replace(/\[([^\]]+)\]/g, ":$1");
-
-  if (!route.startsWith("/")) {
-    route = "/" + route;
-  }
-
-  if (route === "/" || route === "") {
-    return "/";
-  }
-
-  return route;
-}
-
-/**
- * Extracts parameter names from a file path
- */
 function extractParams(filePath: string): string[] {
   const matches = filePath.match(/\[([^\]]+)\]/g);
   if (!matches) return [];
   return matches.map((match) => match.replace(/\[|\]/g, ""));
 }
 
-/**
- * Recursively scans the API directory and builds a route map
- */
 export async function buildRouteMap(
   apiDir: string
 ): Promise<Map<string, RouteInfo>> {
   const routeMap = new Map<string, RouteInfo>();
 
-  async function scanDirectory(
-    dir: string,
-    relativePath: string = ""
-  ): Promise<void> {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
+  let files = await glob(`${apiDir}/**/*.{ts,js}`, {
+    ignore: ["**/node_modules/**", "**/_*", "**/_*/**"]
+  });
 
-    for (const entry of entries) {
-      const fullPath = path.join(dir, entry.name);
-      const relativeFilePath = relativePath
-        ? path.join(relativePath, entry.name)
-        : entry.name;
+  files = files.filter((file) => {
+    const filePath = path.relative(apiDir, file);
+    // eslint-disable-next-line no-useless-escape
+    return /^[A-Za-z0-9.\/\\\-\[\]]+$/.test(filePath);
+  });
 
-      if (entry.name.startsWith("_")) {
-        continue;
-      }
+  for (const fullPath of files) {
+    const relativeFilePath = path.relative(apiDir, fullPath);
+    const expressPath = filePathToRoute(relativeFilePath, "express");
+    const params = extractParams(relativeFilePath);
 
-      if (entry.isDirectory()) {
-        await scanDirectory(fullPath, relativeFilePath);
-      } else if (
-        entry.isFile() &&
-        (entry.name.endsWith(".ts") || entry.name.endsWith(".js"))
-      ) {
-        const expressPath = filePathToRoute(relativeFilePath);
-        const params = extractParams(relativeFilePath);
-
-        routeMap.set(expressPath, {
-          filePath: fullPath,
-          expressPath,
-          params
-        });
-      }
-    }
+    routeMap.set(expressPath, {
+      filePath: fullPath,
+      expressPath,
+      params
+    });
   }
 
-  await scanDirectory(apiDir);
   return routeMap;
 }
 
-/**
- * Matches a request path to a route in the route map
- * Handles dynamic route matching
- */
 export function matchRoute(
   requestPath: string,
   routeMap: Map<string, RouteInfo>
@@ -137,16 +94,11 @@ export function matchRoute(
   return null;
 }
 
-/**
- * Gets the file path for a given request path
- * Handles both direct files and index files
- */
 export async function getRouteFile(
   requestPath: string,
   apiDir: string,
   routeMap: Map<string, RouteInfo>
 ): Promise<string | null> {
-  // Normalize the request path (remove /api prefix if present)
   let routePath = requestPath.replace(/^\/api/, "");
   if (routePath === "" || routePath === "/") {
     routePath = "/";
@@ -157,8 +109,6 @@ export async function getRouteFile(
     return routeInfo.filePath;
   }
 
-  // Fallback: try direct file lookup for static routes
-  // Only do this if routePath is not "/" (root)
   if (routePath !== "/") {
     const fileSystemPath = routePath.startsWith("/")
       ? routePath.slice(1)
@@ -178,7 +128,6 @@ export async function getRouteFile(
       }
     }
   } else {
-    // Try root index file: api/index.ts
     const rootIndexPath = path.join(apiDir, "index.ts");
     try {
       await fs.stat(rootIndexPath);
@@ -191,9 +140,6 @@ export async function getRouteFile(
   return null;
 }
 
-/**
- * Extracts route parameters from the request path based on the route info
- */
 export function extractRouteParams(
   requestPath: string,
   routeInfo: RouteInfo
@@ -218,10 +164,6 @@ export function extractRouteParams(
   return params;
 }
 
-/**
- * Watches the API directory for file additions and removals
- * Rebuilds the route map when changes are detected
- */
 export function watchRouteMap(
   apiDir: string,
   routeMap: Map<string, RouteInfo>,

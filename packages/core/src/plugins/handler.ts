@@ -21,7 +21,7 @@ export const handlerPlugin = {
     }
 
     build.onResolve({ filter: /api/ }, (args) => {
-      if (args.path.startsWith(".") || path.isAbsolute(args.path)) {
+      if (args.kind === "entry-point") {
         const resolvedPath = path.normalize(
           path.isAbsolute(args.path)
             ? args.path

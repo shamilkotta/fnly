@@ -2,7 +2,37 @@ import { build as esbuild } from "esbuild";
 import { glob } from "glob";
 import path from "path";
 import fs from "fs";
+import { tsImport } from "tsx/esm/api";
+
 import { handlerPlugin } from "./plugins/handler.js";
+import { filePathToRoute } from "./utils/filePathToRoute.js";
+
+const ALLOWED_HTTP_METHODS = [
+  "GET",
+  "POST",
+  "PUT",
+  "DELETE",
+  "PATCH",
+  "OPTIONS",
+  "HEAD"
+] as const;
+
+type HttpMethod = (typeof ALLOWED_HTTP_METHODS)[number];
+
+const RUNTIME = {
+  nodejs20x: "nodejs20.x",
+  nodejs22x: "nodejs22.x",
+  nodejs24x: "nodejs24.x"
+};
+
+interface RouteManifest {
+  [routePath: string]: {
+    method: HttpMethod[];
+    runtime: (typeof RUNTIME)[keyof typeof RUNTIME];
+    handler: string;
+    path: string;
+  };
+}
 
 export async function build(cwd: string) {
   const apiDir = path.resolve(cwd, "api");
@@ -11,11 +41,17 @@ export async function build(cwd: string) {
 
   if (!fs.existsSync(apiDir)) {
     console.error(`❌ API directory not found: ${apiDir}`);
-    throw new Error(`API directory not found: ${apiDir}`);
+    process.exit(1);
   }
 
-  const files = await glob(`${apiDir}/**/*.{ts,js}`, {
+  let files = await glob(`${apiDir}/**/*.{ts,js}`, {
     ignore: ["**/node_modules/**", "**/_*", "**/_*/**"]
+  });
+
+  files = files.filter((file) => {
+    const filePath = path.relative(apiDir, file);
+    // eslint-disable-next-line no-useless-escape
+    return /^[A-Za-z0-9.\/\\\-\[\]]+$/.test(filePath);
   });
 
   if (files.length === 0) {
@@ -23,36 +59,46 @@ export async function build(cwd: string) {
     return;
   }
 
+  const manifest: RouteManifest = {};
+
+  for (const file of files) {
+    const relativePath = path.relative(apiDir, file);
+    const routePath = filePathToRoute(relativePath, "worker");
+    const handlerName = path.basename(file).replace(/\.(ts|js)$/, ".handler");
+
+    const exportedMethods = await getMethods(file);
+
+    if (exportedMethods.length > 0) {
+      const existing = manifest[routePath];
+      if (existing) {
+        const existingMethods = existing.method;
+        const allMethods = [
+          ...new Set([...existingMethods, ...exportedMethods])
+        ] as HttpMethod[];
+        manifest[routePath] = {
+          method: allMethods,
+          runtime: RUNTIME.nodejs20x,
+          handler: handlerName,
+          path: relativePath.replace(/\.(ts|js)$/, ".js")
+        };
+      } else {
+        manifest[routePath] = {
+          method: exportedMethods as HttpMethod[],
+          handler: handlerName,
+          runtime: RUNTIME.nodejs20x,
+          path: relativePath.replace(/\.(ts|js)$/, ".js")
+        };
+      }
+    } else {
+      console.error(`❌ No exported methods found in ${file}`);
+      process.exit(1);
+    }
+  }
+
   if (fs.existsSync(functionDir)) {
     fs.rmSync(functionDir, { recursive: true, force: true });
   }
 
-  const routes: Record<
-    string,
-    { file: string; runtime: string; handler: string }
-  > = {};
-
-  // Prepare entry points: map output paths to input files
-  // const entryPoints: Record<string, string> = {};
-  // const fileMetadata = new Map<
-  //   string,
-  //   { relativePath: string; outFile: string }
-  // >();
-
-  // for (const file of files) {
-  //   const relativePath = path.relative(apiDir, file);
-  //   const outFile = relativePath.replace(/\.(ts|js)$/, ".js");
-  //   const outFileDir = path.dirname(path.join(outDir, outFile));
-
-  //   // Ensure output directories exist
-  //   fs.mkdirSync(outFileDir, { recursive: true });
-
-  //   // Use output path as key (relative to outDir)
-  //   entryPoints[outFile] = file;
-  //   fileMetadata.set(file, { relativePath, outFile });
-  // }
-
-  // Build all files in a single esbuild call
   const result = await esbuild({
     entryPoints: files,
     bundle: true,
@@ -73,34 +119,28 @@ export async function build(cwd: string) {
     throw new Error(`Build failed with ${result.errors.length} error(s)`);
   }
 
-  // Process each built file and transform paths
-  //   for (const metadata of fileMetadata.values()) {
-  //     const { relativePath, outFile } = metadata;
+  fs.copyFileSync(
+    path.join(cwd, "package.json"),
+    path.join(fnlyDir, "package.json")
+  );
 
-  //     // Transform route path
-  //     let routePath = relativePath.replace(/\.(ts|js)$/, "").replace(/\\/g, "/");
+  // Write manifest.json
+  const manifestPath = path.join(fnlyDir, "manifest.json");
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
 
-  //     if (routePath.endsWith("/index")) {
-  //       routePath = routePath.slice(0, -6);
-  //     }
-
-  //     routePath = "/" + routePath.replace(/^\/+/, "");
-
-  //     routes[routePath === "//" ? "/" : routePath] = {
-  //       file: outFile,
-  //       runtime: "nodejs20.x",
-  //       handler: "index.handler"
-  //     };
-
-  //     console.log(
-  //       `✅ Built ${routePath} → ${path.relative(cwd, path.join(outDir, outFile))}`
-  //     );
-  //   }
-
-  //   // Write routes manifest
-  //   const manifestPath = path.join(outDir, "routes.json");
-  //   fs.writeFileSync(manifestPath, JSON.stringify(routes, null, 2));
-
-  console.log(`\n🗺️  Routes manifest created at dist/routes.json`);
-  console.log(JSON.stringify(routes, null, 2));
+  console.log("✅ Build completed");
 }
+
+const getMethods = async (file: string) => {
+  const module = await tsImport(file, import.meta.url);
+  const methods = Object.keys(module);
+
+  for (const method of methods) {
+    if (!ALLOWED_HTTP_METHODS.includes(method as HttpMethod)) {
+      console.error(`❌ Invalid method: ${method} in ${file}`);
+      process.exit(1);
+    }
+  }
+
+  return methods;
+};
