@@ -12,7 +12,12 @@
         "AWS_SECRET_ACCESS_KEY",
         "S3_BUCKET_NAME",
         "PORT",
-        "API_URL"
+        "API_URL",
+        "WORKOS_API_KEY",
+        "WORKOS_CLIENT_ID",
+        "WORKOS_REDIRECT_URI",
+        "WEB_URL",
+        "NEXT_PUBLIC_API_URL"
       ]
     },
     "lint": {
@@ -32,7 +37,12 @@
         "AWS_SECRET_ACCESS_KEY",
         "S3_BUCKET_NAME",
         "PORT",
-        "API_URL"
+        "API_URL",
+        "WORKOS_API_KEY",
+        "WORKOS_CLIENT_ID",
+        "WORKOS_REDIRECT_URI",
+        "WEB_URL",
+        "NEXT_PUBLIC_API_URL"
       ]
     }
   }

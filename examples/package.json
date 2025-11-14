@@ -1,0 +1,24 @@
+{
+  "name": "example",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "fnly dev",
+    "build": "fnly build",
+    "deploy": "fnly deploy",
+    "test": "echo 'Add test script here'",
+    "lint": "eslint"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "^22.0.0",
+    "eslint": "^9.38.0",
+    "fnly": "workspace:*",
+    "typescript": "5.9.2"
+  },
+  "dependencies": {
+    "nanoid": "^5.1.6"
+  }
+}
